@@ -1,12 +1,13 @@
 public class TxHandler {
 
+    private UTXOPool utxoPool;
     /**
      * Creates a public ledger whose current UTXOPool (collection of unspent transaction outputs) is
      * {@code utxoPool}. This should make a copy of utxoPool by using the UTXOPool(UTXOPool uPool)
      * constructor.
      */
     public TxHandler(UTXOPool utxoPool) {
-        // IMPLEMENT THIS
+        this.utxoPool = new UTXOPool(utxoPool);
     }
 
     /**
@@ -19,7 +20,41 @@ public class TxHandler {
      *     values; and false otherwise.
      */
     public boolean isValidTx(Transaction tx) {
-        // IMPLEMENT THIS
+        UTXOPool currentPool = new UTXOPool(this.utxoPool);
+        double inputValuesSum = 0;
+        double outputValuesSum = 0;
+
+        int inputIndex = 0;
+        for (Transaction.Input input: tx.getInputs()) {
+            UTXO prevUtxo = new UTXO(input.prevTxHash, input.outputIndex);
+            
+            // validate that the output pointed is present.
+            if (!utxoPool.contains(prevUtxo)) {
+                return false;
+            }
+
+            Transaction.Output prevOutput = utxoPool.getTxOutput(prevUtxo);
+
+            if (!Crypto.verifySignature(prevOutput.signature, 
+                tx.getRawDataToSign(inputIndex), 
+                input.signature)) {
+                 return false;
+            }
+
+            inputValuesSum += utxoPool.getTxOutput(prevUtxo).value;
+            utxoPool.removeUTXO(prevUtxo);
+
+            inputIndex++;
+        }
+        for (Transaction.Output output: tx.getOutputs()) {
+            if (output.value < 0) {
+                return false;
+            }
+            outputValuesSum += output.value;
+        }
+
+        return outputValuesSum <= inputValuesSum;
+
     }
 
     /**
@@ -29,6 +64,27 @@ public class TxHandler {
      */
     public Transaction[] handleTxs(Transaction[] possibleTxs) {
         // IMPLEMENT THIS
+    }
+
+    private boolean validateInput(Transaction.Input input, UTXO prevUtxo, UTXOPool utxoPool) {
+        
+        
+        //validate Signature of the input
+        PublicKey prevOwnersPublicKey = prevTx.getOutputs().get(input.outputIndex).address;
+        if (!Crypto.verifySignature(prevOwnersPublicKey, prevTx.getRawDataToSign(input.outputIndex), input.signature)) {
+            return false;
+        }
+
+        return true;
+    }
+
+    private double getValueFromPrevOutput(Transaction.Input input, UTXOPool utxoPool) {
+        return utxoPool.getTxOutput(new UTXO(input.prevTxHash, input.outputIndex)).value;
+    }
+
+    private void removeUsedOutput(Transaction.Input input, UTXOPool utxoPool) {
+        // Remove utxo so that it is not double spent.
+        utxoPool.removeUTXO(new UTXO(input.prevTxHash, input.outputIndex));
     }
 
 }
